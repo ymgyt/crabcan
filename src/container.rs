@@ -1,6 +1,8 @@
-use crate::cli::{Options};
-use crate::errors::Errcode;
+use crate::cli::Options;
 use crate::config::ContainerOpts;
+use crate::errors::Errcode;
+use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
+use std::os::unix::io::RawFd;
 
 use nix::sys::utsname::uname;
 use scan_fmt::scan_fmt;
@@ -11,13 +13,8 @@ pub struct Container {
 
 impl Container {
     pub fn new(args: Options) -> Result<Container, Errcode> {
-        let config = ContainerOpts::new(
-            args.command,
-            args.uid,
-            args.mount_dir)?;
-        Ok(Container {
-            config,
-        })
+        let config = ContainerOpts::new(args.command, args.uid, args.mount_dir)?;
+        Ok(Container { config })
     }
 
     pub fn create(&mut self) -> Result<(), Errcode> {
@@ -30,7 +27,6 @@ impl Container {
         Ok(())
     }
 }
-
 
 pub const MINIMAL_KERNEL_VERSION: f32 = 4.8;
 
@@ -63,4 +59,16 @@ pub fn start(args: Options) -> Result<(), Errcode> {
     }
     log::debug!("Finished, cleaning & exit");
     container.clean_exit()
+}
+
+pub fn generate_socketpair() -> Result<(RawFd, RawFd), Errcode> {
+    match socketpair(
+        AddressFamily::Unix,
+        SockType::SeqPacket,
+        None,
+        SockFlag::SOCK_CLOEXEC,
+    ) {
+        Ok(res) => Ok(res),
+        Err(_) => Err(Errcode::SocketError(0)),
+    }
 }
